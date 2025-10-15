@@ -9,7 +9,19 @@ FROM maintain_task_log
 GROUP BY process_id
 ORDER BY process_id;
 
+==
 
+  SELECT process_id, batch_id, status, status_message, start_time, end_time
+FROM ACCOUNTDBO.maintain_process_log
+WHERE process_id IN (
+  SELECT process_id
+  FROM ACCOUNTDBO.maintain_task_log
+  GROUP BY process_id
+)
+ORDER BY start_time DESC;
+
+====
+       
 Got you. Here’s a “schema-level stats status” mini-dashboard you can paste into SQL*Plus/SQLcl/SQL Developer for ACCOUNTDBO. It tells you what Oracle thinks about prefs, coverage, staleness, locks, and recent work.
 
 0) Make DML deltas current (one liner)
@@ -150,3 +162,4 @@ If unusable indexes > 0, fix those before blaming the CBO.
 
 
 Once you’ve got the snapshot, you can decide whether to run a targeted gather or wire up a nightly GATHER AUTO to keep it green.
+
