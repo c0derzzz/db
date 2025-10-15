@@ -21,6 +21,16 @@ WHERE process_id IN (
 ORDER BY start_time DESC;
 
 ====
+
+       -- jobs the executor would run
+SELECT job, what, next_date, last_date, failures
+FROM dba_jobs
+WHERE UPPER(what) LIKE '%MAINTENANCETASK.TASK_EXECUTION%';
+
+-- workers must be > 0 (and usually >= 5–10)
+SELECT name, value FROM v$parameter WHERE name='job_queue_processes';
+
+====
        
 Got you. Here’s a “schema-level stats status” mini-dashboard you can paste into SQL*Plus/SQLcl/SQL Developer for ACCOUNTDBO. It tells you what Oracle thinks about prefs, coverage, staleness, locks, and recent work.
 
@@ -162,4 +172,5 @@ If unusable indexes > 0, fix those before blaming the CBO.
 
 
 Once you’ve got the snapshot, you can decide whether to run a targeted gather or wire up a nightly GATHER AUTO to keep it green.
+
 
