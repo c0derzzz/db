@@ -1,0 +1,172 @@
+STATS PLAN
+
+why do i so many thousands of tasks that are stuck in NEW state?
+
+
+>> Short answer: because the dispatcher isn’t picking them up.
+
+=======
+FIX:
+
+
+Purge ancient never-started tasks (optional hygiene)
+
+DELETE FROM maintain_task_log
+WHERE task_status = 'NEW'
+  AND process_id IN (
+    SELECT process_id FROM maintain_process_log
+    WHERE end_time IS NOT NULL
+  )
+  AND NVL(task_submit_time, DATE '2000-01-01') < ADD_MONTHS(TRUNC(SYSDATE), -3);
+COMMIT;
+
+
+2) Drain the backlog, safely
+Pick a stuck pid (lots of NEW, zero SUBMITTED/RUNNING):
+BEGIN
+  ACCOUNTDBO.maintenancemanager.resume_maintenance_process(<pid>);
+END;
+/
+
+
+Option C — Hygiene: purge ancient “never-started” tasks
+DELETE FROM ACCOUNTDBO.maintain_task_log t
+WHERE t.task_status = 'NEW'
+  AND t.process_id IN (
+    SELECT p.process_id FROM ACCOUNTDBO.maintain_process_log p
+    WHERE p.end_time IS NOT NULL OR p.start_time < SYSDATE-30
+  );
+COMMIT;
+
+(That keeps the tables small and the dashboard sane.)
+
+4) After it drains, prevent re-accumulation
+Consider a small nightly “janitor” that:
+finds processes with only NEW tasks and no activity for N hours and resumes them,
+
+
+or deletes NEW tasks tied to closed processes older than 90 days.
+
+
+
+
+5) CODE FIX FOR SCHEDULER
+
+Option A (no code change – scheduler policy):
+Before starting a new run, look for an existing IN_PROGRESS process for that batch and resume it instead of creating a new PID:
+BEGIN
+  logger.setProcessJobName('Saturday Maintenance');
+
+  DECLARE
+    v_batch_id  NUMBER := ACCOUNTDBO.maintenancemanager.getPeriodBatchID1;
+    v_pid       NUMBER;
+  BEGIN
+    -- Keep the builder for new periods
+    IF ACCOUNTDBO.maintenancemanager.isTimeForNewBatch1 THEN
+      ACCOUNTDBO.maintenancemanager.buildNewAutoBatch1;
+    END IF;
+
+    -- Keep the stats backup safety net
+    ACCOUNTDBO.backupstatsmanager.backupStats(v_batch_id);
+
+    -- Resume-first (use end_time IS NULL as the primary unfinished test)
+    BEGIN
+      SELECT process_id INTO v_pid
+      FROM (
+        SELECT process_id
+        FROM ACCOUNTDBO.maintain_process_log
+        WHERE batch_id = v_batch_id
+          AND end_time IS NULL
+        ORDER BY start_time   -- oldest first
+      )
+      WHERE ROWNUM = 1;
+
+      ACCOUNTDBO.maintenancemanager.resume_maintenance_process(v_pid);
+    EXCEPTION
+      WHEN NO_DATA_FOUND THEN
+        ACCOUNTDBO.maintenancemanager.maintenance_process_ctl(v_batch_id);
+    END;
+  END;
+END;
+
+
+
+CHATGPT EXTRACT
+—------------------------------
+
+DECLARE
+  v_pid NUMBER;
+BEGIN
+  SELECT process_id INTO v_pid
+  FROM (
+    SELECT process_id
+    FROM ACCOUNTDBO.maintain_process_log
+    WHERE batch_id = ACCOUNTDBO.maintenancemanager.getPeriodBatchID1
+      AND status = 'IN_PROGRESS'
+      AND end_time IS NULL
+    ORDER BY start_time
+  ) WHERE ROWNUM = 1;
+
+  IF v_pid IS NOT NULL THEN
+    ACCOUNTDBO.maintenancemanager.resume_maintenance_process(v_pid);
+  ELSE
+    ACCOUNTDBO.maintenancemanager.maintenance_process_ctl(
+      ACCOUNTDBO.maintenancemanager.getPeriodBatchID1
+    );
+  END IF;
+END;
+/
+GEMINI SUMMARY
+—------------------------
+
+
+BEGIN
+  logger.setProcessJobName('Saturday Maintenance');
+
+  DECLARE
+    v_batch_id  NUMBER := ACCOUNTDBO.maintenancemanager.getPeriodBatchID1();
+    v_pid       NUMBER;
+  BEGIN
+    -- Build task list if needed (same as before)
+    IF ACCOUNTDBO.maintenancemanager.isTimeForNewBatch1 THEN
+      ACCOUNTDBO.maintenancemanager.buildNewAutoBatch1;
+    END IF;
+
+    -- Backup stats (same as before)
+    ACCOUNTDBO.backupstatsmanager.backupStats(v_batch_id);
+
+    -- --- NEW "RESUME-FIRST" LOGIC ---
+    BEGIN
+      -- Try to find an unfinished PID for this batch
+      SELECT process_id INTO v_pid
+      FROM (
+        SELECT process_id
+        FROM ACCOUNTDBO.maintain_process_log
+        WHERE batch_id = v_batch_id
+          AND end_time IS NULL  -- It's 'IN_PROGRESS'
+        ORDER BY start_time    -- Get the oldest one
+      )
+      WHERE ROWNUM = 1;
+
+      -- If found, resume it
+      ACCOUNTDBO.maintenancemanager.resume_maintenance_process(v_pid);
+
+    EXCEPTION
+      WHEN NO_DATA_FOUND THEN
+        -- No unfinished PID found, so create a new one (original behavior)
+        ACCOUNTDBO.maintenancemanager.maintenance_process_ctl(v_batch_id);
+    END;
+    -- --- END OF NEW LOGIC ---
+
+  END;
+END;
+
+
+
+
+
+
+
+
+
+
