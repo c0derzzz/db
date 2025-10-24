@@ -167,6 +167,20 @@ END;
 
 
 
+======
 
+process cleanup (extra)
+UPDATE ACCDBO.maintain_process_log p
+SET status='CANCELLED',
+    status_message='Closed as stale by ops',
+    end_time=SYSDATE
+WHERE p.end_time IS NULL
+  AND p.start_time < SYSDATE - 14     -- adjust window
+  AND NOT EXISTS (
+    SELECT 1 FROM ACCDBO.maintain_task_log t
+    WHERE t.process_id = p.process_id
+      AND t.task_status IN ('SUBMITTED','IN_PROGRESS')
+  );
+COMMIT;
 
 
