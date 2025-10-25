@@ -1,0 +1,31 @@
+FIX for
+
+⚠️ Leaves the process headers (maintain_process_log) still open if end_time IS NULL and no tasks remain. 
+Those “empty” processes can confuse your resume logic or %complete rollups.
+
+
+UPDATE ACCBO.maintain_process_log p
+SET    status = CASE
+                  WHEN EXISTS (SELECT 1 FROM ACCBO..maintain_task_log t
+                                WHERE t.process_id=p.process_id
+                                  AND t.task_status='COMPLETED')
+                    THEN 'PARTIALLY COMPLETE'
+                  ELSE 'CANCELLED'
+                END,
+       status_message = 'Closed during backlog cleanup',
+       end_time = SYSDATE
+WHERE  p.end_time IS NULL
+  AND NOT EXISTS (
+        SELECT 1 FROM ACCBO.maintain_task_log t
+        WHERE t.process_id=p.process_id
+          AND t.task_status IN ('NEW','WAITING','SUBMITTED','IN_PROGRESS')
+      );
+COMMIT;
+
+UPDATE ACCBO.maintain_task_log
+SET task_status='CANCELLED',
+    status_message='Cancelled during backlog cleanup',
+    task_end_time = NVL(task_end_time, SYSDATE)
+WHERE task_status='WAITING'
+  AND process_id IN (SELECT process_id FROM ACCBO.maintain_process_log WHERE end_time IS NOT NULL);
+COMMIT;
