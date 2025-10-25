@@ -1,0 +1,53 @@
+2) Pick the batch you want to keep (the “fresh” one)
+-- keep this batch; everything else gets discarded
+SELECT ACCDB.maintenancemanager.getPeriodBatchID1 AS batch_to_keep FROM dual;
+
+
+3) Close any open processes you’re not keeping (soft stop)
+UPDATE ACCDB.maintain_process_log
+SET    status = 'CANCELLED',
+       status_message = 'Closed during fresh reset',
+       end_time = SYSDATE
+WHERE  batch_id <> :keep_batch
+AND    end_time IS NULL;
+COMMIT;
+
+4) Hard purge all other batches (children → headers → plan)
+-- delete task rows for other batches
+DELETE FROM ACCDB.maintain_task_log t
+WHERE t.process_id IN (
+  SELECT p.process_id FROM ACCDB.maintain_process_log p
+  WHERE p.batch_id <> :keep_batch
+);
+
+DELETE FROM ACCDB.maintain_task_sum_log s
+WHERE s.process_id IN (
+  SELECT p.process_id FROM ACCDB.maintain_process_log p
+  WHERE p.batch_id <> :keep_batch
+);
+
+-- delete process headers for other batches
+DELETE FROM ACCDB.maintain_process_log
+WHERE batch_id <> :keep_batch;
+
+-- delete the plan rows for other batches
+DELETE FROM ACCDB.maintain_task_list
+WHERE batch_id <> :keep_batch;
+
+COMMIT;
+
+5) (Optional) Also rebuild the current batch plan to be truly fresh
+DELETE FROM ACCDB.maintain_task_list
+WHERE batch_id = :keep_batch;
+COMMIT;
+
+BEGIN
+  ACCDB.maintenancemanager.buildNewAutoBatch1;  -- repopulates MAINTAIN_TASK_LIST for :keep_batch
+END;
+/
+
+6) Start a brand-new run for the kept batch (don’t resume)
+BEGIN
+  ACCDB.maintenancemanager.maintenance_process_ctl(:keep_batch);
+END;
+/
