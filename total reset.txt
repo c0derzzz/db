@@ -1,0 +1,87 @@
+
+2) Stop any leftover DBMS_JOB workers (executor jobs)
+
+Inspect and then break/remove the old executor jobs so they don’t keep flipping states while you cancel.
+
+-- inspect
+SELECT job, what, broken, failures, last_date, next_date
+FROM   dba_jobs
+WHERE  UPPER(what) LIKE '%MAINTENANCETASK.TASK_EXECUTION%';
+
+-- break them (safer than remove if you worry about in-flight jobs)
+BEGIN
+  FOR r IN (
+    SELECT job FROM dba_jobs
+    WHERE UPPER(what) LIKE '%MAINTENANCETASK.TASK_EXECUTION%'
+  ) LOOP
+    DBMS_JOB.BROKEN(r.job, TRUE);
+  END LOOP;
+END;
+/
+
+
+
+3) Cancel all pending tasks (keep completed/errored intact)
+This preserves history but nukes the backlog.
+
+UPDATE ACCDBO.MAINTAIN_TASK_LOG
+   SET task_status    = 'CANCELLED',
+       status_message = 'Cancelled during reset on '||TO_CHAR(SYSDATE,'YYYY-MM-DD HH24:MI'),
+       task_end_time  = NVL(task_end_time, SYSDATE)
+ WHERE task_status IN ('NEW','WAITING','SUBMITTED','IN_PROGRESS');
+COMMIT;
+
+
+
+4) Close any open processes that now have no active work
+
+After step 3 there shouldn’t be SUBMITTED/IN_PROGRESS tasks. Close headers so your “resume-first” logic will not resurrect them.
+-- Close processes that have no active tasks left
+UPDATE ACCDBO.MAINTAIN_PROCESS_LOG p
+   SET status         = CASE
+                          WHEN EXISTS (
+                            SELECT 1 FROM ACCDBO.MAINTAIN_TASK_LOG t
+                            WHERE t.process_id = p.process_id
+                              AND t.task_status = 'COMPLETED'
+                          ) THEN 'PARTIALLY COMPLETE'
+                          ELSE 'CANCELLED'
+                        END,
+       status_message = 'Closed after cancelling pending tasks',
+       end_time       = SYSDATE
+ WHERE p.end_time IS NULL
+   AND NOT EXISTS (
+         SELECT 1 FROM ACCDBO.MAINTAIN_TASK_LOG t
+         WHERE t.process_id = p.process_id
+           AND t.task_status IN ('SUBMITTED','IN_PROGRESS','NEW','WAITING')
+       );
+COMMIT;
+
+
+Sanity check (should return 0 rows):
+SELECT p.process_id
+FROM   ACCDBO.MAINTAIN_PROCESS_LOG p
+JOIN   ACCDBO.MAINTAIN_TASK_LOG    t ON t.process_id=p.process_id
+WHERE  p.end_time IS NULL
+AND    t.task_status IN ('NEW','WAITING','SUBMITTED','IN_PROGRESS');
+
+
+
+5) Build a fresh plan for the current batch and start a new run
+If your auto-builder filters are narrow, seed missing tables first; otherwise just build and run.
+
+DECLARE
+  v_batch NUMBER := ACCDBO.maintenancemanager.getPeriodBatchID1;
+BEGIN
+  -- (optional) rebuild the plan for truly clean start
+  DELETE FROM ACCDBO.MAINTAIN_TASK_LIST WHERE batch_id = v_batch;
+  COMMIT;
+
+  ACCDBO.maintenancemanager.buildNewAutoBatch1;  -- repopulates MAINTAIN_TASK_LIST for v_batch
+
+  -- now create a brand-new process, materialize tasks, and dispatch
+  ACCDBO.maintenancemanager.maintenance_process_ctl(v_batch);
+END;
+/
+
+
+Changed: Every pending/half-started task is now CANCELLED, every open process is closed with end_time, and your next run is a fresh process with a fresh plan.
