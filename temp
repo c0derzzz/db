@@ -1,0 +1,8 @@
+DECLARE
+  CURSOR c IS SELECT task_id FROM maintain_task_log WHERE task_status='NEW' ORDER BY task_id;
+BEGIN
+  FOR r IN c LOOP
+    maintenancetask.task_execution(r.task_id);
+  END LOOP;
+END;
+/
