@@ -1,0 +1,62 @@
+End‑of‑Year Self‑Assessment (L3 SRE)
+Strategy & Outcomes
+
+Operating against three reliability pillars—toil elimination, performance/stability hygiene, and proactive observability—I delivered improvements that reduce risk and create durable efficiencies for our services and teams.
+
+1) Business Results
+
+Deliver the goals of your team, business/function and the company
+
+Accomplishments (strategy → outcome)
+
+Credential toil elimination → Reframed password rotations from ad‑hoc tickets to a standard, automated, auditable process. Built validation/reporting and enabled teammates through short trainings. Outcome: hours of manual work removed per cycle, fewer errors, stronger control posture, and a reusable pattern other teams can adopt.
+
+Reliability via performance hygiene (newarc) → Treated nightly failures as a systemic data‑hygiene issue, not a one‑off fix. Analyzed AWR/SQL, rebuilt stale stats across the majority of tables, and added a refresh/validation cadence. Outcome: stable and faster nightly runs with predictable capacity and fewer re‑runs/pages.
+
+Resilience by default for maintenance → Moved H2 post‑reboot steps into a hardened systemd service so recovery after PLM is zero‑touch. Outcome: lower MTTR on any reboot scenario and a pattern we can replicate to other services.
+
+GC governance for RBRM Java web app → Established a baseline, led investigation of long pauses, tuned GC/configs, validated in UAT, and codified gates/runbook for PROD. Outcome: fewer pauses, better responsiveness, and lasting stability under load.
+
+Observability as a product → Onboarded Trenton logs, tuned Splunk filters/queries, and built Dynatrace dashboards plus synthetics that reflect user‑critical flows. Outcome: earlier detection, cleaner triage, and data to back SLO/error‑budget decisions.
+
+Development opportunities
+
+Formalize SLIs/SLOs and error budgets for top services and use them to prioritize reliability work with stakeholders.
+
+Extend capacity + GC tuning for RBRM with repeatable load tests and production telemetry.
+
+2) Client / Customer / Stakeholder
+
+Identify and deliver solutions that address the needs of clients/customers/stakeholders
+
+Accomplishments (strategy → outcome)
+
+Change safety first → Led the OS user‑restriction rollout with clear comms, guardrails, and rollback. Outcome: clean deployment with zero production incidents and a repeatable approach for similar controls.
+
+Signal quality over signal volume → Reduced alert noise and added synthetics tied to client‑critical paths. Outcome: faster triage (better MTTD/MTTR) and fewer false positives for partner teams.
+
+Reusable solutions → Designed password‑rotation automation for extensibility and provided enablement so sister teams can adopt. Outcome: less duplicated effort and consistent controls across the org.
+
+Reliable support → Consistent on‑call/prod support and off‑hours backup when needed. Outcome: shorter time‑to‑mitigation and fewer escalations to customers.
+
+Development opportunities
+
+Establish a lightweight stakeholder feedback loop (quarterly) to quantify reliability outcomes and surface the next most valuable fixes.
+
+3) Teamwork and Leadership
+
+Foster a collaborative and inclusive environment that supports growth and development
+
+Accomplishments (strategy → outcome)
+
+Enablement over heroics → Ran short tutoring sessions (password automation, Splunk queries, systemd patterns) and kept docs current. Outcome: teammates can self‑serve; less key‑person risk.
+
+Raise the hiring bar → Served as a certified interviewer and contributed to cohort evaluations mapped to SRE competencies. Outcome: stronger pipeline and consistent criteria.
+
+Problem leadership, not ticket churn → Coordinated cross‑team work for newarc and RBRM GC as multi‑step remediations with owners, gates, and rollbacks. Outcome: durable fixes that survive handoffs and audits.
+
+Operational rigor → Converted noisy alerts and incidents into backlog items with measurable success criteria. Outcome: fewer repeat issues and clearer accountability.
+
+Development opportunities
+
+Act as primary incident commander for multiple Sev‑2+ events to sharpen stakeholder comms and rapid decision‑making.
