@@ -1,0 +1,18 @@
+SELECT 
+    s.sid, 
+    s.username, 
+    s.status,
+    -- How long they have been idle (in minutes)
+    ROUND(s.last_call_et / 60, 1) AS minutes_idle,
+    -- The text of the LAST query they ran
+    q.sql_text
+FROM 
+    v$session s
+JOIN 
+    v$sql q ON s.prev_sql_id = q.sql_id
+WHERE 
+    s.status = 'INACTIVE'
+    -- Only show sessions that are actually blocking someone else
+    AND s.sid IN (SELECT blocking_session FROM v$session)
+ORDER BY 
+    minutes_idle DESC;
