@@ -16,3 +16,32 @@ WHERE
     AND s.sid IN (SELECT blocking_session FROM v$session)
 ORDER BY 
     minutes_idle DESC;
+
+
+=====
+
+To check the current setting of MAX_IDLE_BLOCKER_TIME in your database, run this SQL command:
+SQL
+
+SHOW PARAMETER MAX_IDLE_BLOCKER_TIME;
+
+Or if you want more detail (or are not using SQL*Plus), run this query:
+SQL
+
+SELECT name, value, description 
+FROM v$parameter 
+WHERE name = 'max_idle_blocker_time';
+
+How to Interpret the Result
+
+Value	Meaning
+0	Disabled (Default). Oracle will not automatically kill idle blockers. They will block forever until you manually kill them.
+> 0	Enabled. The value represents Minutes. (e.g., 5 means a session is killed if it blocks someone while idle for 5 minutes).
+
+⚠️ Important Note on Version
+
+This parameter was officially introduced in Oracle 21c.
+
+    Oracle 19c: It is often not available by default unless you have applied recent Release Updates (RU) (specifically 19.10 or later), where it was backported.
+
+    Result: If the query returns no rows, your version is too old to use this specific "Silver Bullet" method. You will need to use Method 3 (The Custom Job) I mentioned earlier.
